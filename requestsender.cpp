@@ -1,31 +1,28 @@
 #include"RequestSender.h"
 
-RequestSender::RequestSender(QObject* pobj) : QObject(pobj)
+RequestSender::RequestSender(QObject* pobj, ReplyHandler* replyHandler) : QObject(pobj)
 {
     groupID = 0;
     timer = new QTimer(this);
     networkManager = new QNetworkAccessManager(this);
-    for(int i = 0; i < NUM_TIMEFRAMES; ++i)
+    for(int i = 0; i < numTimeframes; ++i)
         requests[i] = new Request(this);
 
     connect(timer, SIGNAL(timeout()), this, SLOT(sendRequests()));
-
-    threadReplyHandler = new QThread;
-    replyHandler = new ReplyHandler;
-    replyHandler -> moveToThread(threadReplyHandler);
-
     connect(networkManager, SIGNAL(finished(QNetworkReply*)),
             replyHandler, SLOT(getReply(QNetworkReply*)));
-    connect(this, SIGNAL(changeHandlerSettings(const QString &, bool)),
-            replyHandler, SLOT(changeHandlerSettingsSlot(const QString &, bool)));
+}
 
-    threadReplyHandler -> start();
+void RequestSender::finish()
+{
+    //networkManager -> clearAccessCache();
+    qDebug() << "Finish for RequestSender" << QThread::currentThread() << endl;
+    deleteLater();
 }
 
 void RequestSender::changeSettings(const QString &quotes, int frequency, bool fileRecordOn)
 {
-    emit changeHandlerSettings(quotes, fileRecordOn);
-    for(int i = 0; i < NUM_TIMEFRAMES; ++i)
+    for(int i = 0; i < numTimeframes; ++i)
     {
         requests[i] -> formRequest(quotes, timeframes[i]);
     }
@@ -35,9 +32,9 @@ void RequestSender::changeSettings(const QString &quotes, int frequency, bool fi
 
 void RequestSender::sendRequests()
 {
-    for (int i = 0; i < NUM_TIMEFRAMES; ++i)
+    for (int i = 0; i < numTimeframes; ++i)
     {
-        QNetworkReply* reply = networkManager -> get(requests[i]->getQRequest());
+        QNetworkReply* reply = networkManager -> get(*(requests[i] -> m_pnr));
         reply ->setProperty("timeframe", QVariant(timeframes[i]));
         reply ->setProperty("groupID", QVariant(groupID));
     }
@@ -47,12 +44,16 @@ void RequestSender::sendRequests()
     ++groupID;
 }
 
-
 //--------------------------------------------
 //--------------------------------------------
 Request::Request(QObject* pobj) : QObject(pobj)
 {
     m_pnr = new QNetworkRequest;
+}
+
+Request:: ~Request()
+{
+    delete m_pnr;
 }
 
 QUrl Request::formUrl(const QString &quotes, int timeframe)
@@ -72,15 +73,11 @@ void Request::formRequest(const QString &quotes, int timeframe)
     config.setProtocol(QSsl::AnyProtocol);
     m_pnr -> setSslConfiguration(config);
 
-    QUrl url = formUrl(quotes, timeframe);
-    m_pnr->setUrl(url);
+    m_pnr->setUrl(formUrl(quotes, timeframe));
 
     m_pnr->setRawHeader("Host", "ssltsw.forexprostools.com");
     m_pnr->setRawHeader("Connection", "keep-alive");
     m_pnr->setRawHeader("Referer", "https://ssltsw.forexprostools.com/");
 }
 
-QNetworkRequest Request::getQRequest()
-{
-    return *m_pnr;
-}
+

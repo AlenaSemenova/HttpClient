@@ -7,7 +7,12 @@ ReplyHandler::ReplyHandler(QObject *pobj): QObject(pobj)
     outputData = new OutputData;
 }
 
-void ReplyHandler::changeHandlerSettingsSlot(const QString &m_quotes, bool m_fileRecordOn)
+ReplyHandler::~ReplyHandler()
+{
+    delete outputData;
+}
+
+void ReplyHandler::changeSettings(const QString &m_quotes, int, bool m_fileRecordOn)
 {
     fileRecordOn = m_fileRecordOn;
 
@@ -29,21 +34,18 @@ void ReplyHandler::getReply(QNetworkReply* reply)
     {
         qDebug() << "Network error: " << error << endl;
 
-        //Ошибка
     }
     else if (reply -> property("groupID").toInt() != groupID)
     {
         qDebug() << "Network error: incorrect groupID: "<< reply -> property("groupID").toInt() << " " <<
                  reply -> property("timeframe").toInt()<< endl;
-        //Ошибка
     }
     else
     {
-
-        //qDebug() << "Get Request. GRoupID: " << groupID << " Timeframe: " << reply -> property("timeframe").toInt() << " Time: " << time.currentTime() <<endl;
+        qDebug() << "Get Request. GRoupID: " << groupID << " Timeframe: " << reply -> property("timeframe").toInt();
 
         saveReply(reply);
-        if (countReceivedRequests == NUM_TIMEFRAMES)
+        if (countReceivedRequests == numTimeframes)
         {
             QTime time;
             outputData -> time = time.currentTime();
@@ -52,8 +54,8 @@ void ReplyHandler::getReply(QNetworkReply* reply)
                 // Запись в файл //
             }
 
-            //OutputData.printInfo();
-            // Отправка куда-то дальше //
+            printInfo();
+            // Отправление //
 
             ++groupID;
             countReceivedRequests = 0;
@@ -91,16 +93,20 @@ void ReplyHandler::saveReply(QNetworkReply *reply)
 
 void ReplyHandler:: printInfo()
 {
-    qDebug() << outputData->time << endl;
+    qDebug() <<" Request: " <<outputData->time << endl;
     QMap<int, QuoteInfo>::const_iterator it;
     int key;
     for (it = outputData->quotesInfo.constBegin(); it != outputData->quotesInfo.constEnd(); ++it)
     {
         key = it.key();
-        qDebug() << "  " << key;
+        qDebug() << key;
         for (int i = 0; i < 4; ++i)
         {
-            qDebug() << "  " << it.value().timeframePacks[i].timeframe;
+            qDebug() << " " << it.value().timeframePacks[i].timeframe;
+            qDebug() << "   maBuy:" << it.value().timeframePacks[i].maBuy;
+            qDebug() << "   maSell:" << it.value().timeframePacks[i].maSell;
+            qDebug() << "   tiBuy:" << it.value().timeframePacks[i].tiBuy;
+            qDebug() << "   tiSell:" << it.value().timeframePacks[i].tiSell;
         }
     }
 }

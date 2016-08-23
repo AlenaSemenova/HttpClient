@@ -5,33 +5,28 @@
 #include <QObject>
 #include "ReplyHandler.h"
 
-#define NUM_TIMEFRAMES 4
-
-class Request;
-
+//class Request;
 class RequestSender: public QObject
 {
     Q_OBJECT
 
 private:
+    static const int numTimeframes = 4;
     QNetworkAccessManager* networkManager;
     QTimer* timer;
-    Request* requests[NUM_TIMEFRAMES];
-    int timeframes[NUM_TIMEFRAMES] = {60, 300, 900, 1800};
+    class Request* requests[numTimeframes];
+    int timeframes[numTimeframes] = {60, 300, 900, 1800};
     int groupID;
-
-    QThread* threadReplyHandler;
-    ReplyHandler* replyHandler;
-
-signals:
-    void changeHandlerSettings(const QString &, bool);
 
 private slots:
     void changeSettings(const QString &, int, bool);
     void sendRequests();
+    void finish();
 
 public:
-    RequestSender(QObject* pobj = 0);
+    RequestSender(QObject* pobj = 0, ReplyHandler* = 0);
+    RequestSender(const RequestSender&);
+
 };
 
 
@@ -48,8 +43,10 @@ private:
 
 public:
    Request(QObject* pobj);
+   ~Request();
    void formRequest(const QString &, int);
-   QNetworkRequest getQRequest();
+
+   friend class RequestSender;
 };
 
 #endif // REQUESTSENDER_H

@@ -4,15 +4,20 @@
 #include <QtNetwork>
 #include <QObject>
 
-#define NUM_TIMEFRAMES 4
-
-class OutputData;
-
 class ReplyHandler: public QObject
 {
     Q_OBJECT
 
+public:
+    ReplyHandler(QObject* pobj = 0);
+    ~ReplyHandler();
+    struct TimeframePack;
+    struct QuoteInfo;
+    struct OutputData;
+
+
 private:
+    static const int numTimeframes = 4;
     int groupID;
     int countReceivedRequests;
     OutputData* outputData;
@@ -21,42 +26,34 @@ private:
     void saveReply(QNetworkReply*);
     void printInfo();
 
-public:
-    ReplyHandler(QObject* pobj = 0);
-
 private slots:
     void getReply(QNetworkReply*);
-    void changeHandlerSettingsSlot(const QString &, bool);
+    void changeSettings(const QString &, int, bool);
 };
 
 
 //----------------------------------------
 //----------------------------------------
 
-class TimeframePack
+struct ReplyHandler::TimeframePack
 {
     int timeframe;
     int maBuy;
     int maSell;
     int tiBuy;
     int tiSell;
-
-    friend ReplyHandler;
 };
 
-class QuoteInfo
+struct ReplyHandler::QuoteInfo
 {
-    TimeframePack timeframePacks[NUM_TIMEFRAMES];
-
-    friend ReplyHandler;
+    static const int numTimeframes = 4;
+    TimeframePack timeframePacks[numTimeframes];
 };
 
-class OutputData
+struct ReplyHandler::OutputData
 {
     QTime time;
     QMap <int, QuoteInfo> quotesInfo;
-
-    friend ReplyHandler;
 };
 
 
