@@ -5,58 +5,85 @@ ReplyHandler::ReplyHandler(QObject *pobj): QObject(pobj)
     groupID = 0;
     countReceivedRequests = 0;
     outputData = new OutputData;
+    db = nullptr;
+    serverConnectionEstablished_ = false;
 }
 
 ReplyHandler::~ReplyHandler()
 {
     delete outputData;
+    delete db;
 }
 
-void ReplyHandler::changeSettings(const QString &m_quotes, int, bool m_fileRecordOn)
+bool ReplyHandler::connectDatabase()
 {
-    fileRecordOn = m_fileRecordOn;
+    db = new QSqlDatabase(QSqlDatabase::addDatabase("QODBC"));
+    db -> setDatabaseName("DRIVER={SQL SERVER};SERVER={ALENA-PC\\SQLEXPRESS};DATABASE={Exchange};UID={user1};PWD={user};Trusted_Connection=Yes;");
+    db -> setConnectOptions();
+    return db -> open();
+}
 
-    outputData->quotesInfo.clear();
-    QStringList quotes = m_quotes.split(',');
-    QStringList::const_iterator it;
-    QuoteInfo quoteInfo;
-    for (it = quotes.constBegin(); it != quotes.constEnd(); ++it)
+void ReplyHandler::changeSettings(const QString &m_quotes, int, bool m_recordOn)
+{
+    recordOn = m_recordOn;
+    if (recordOn && (db == nullptr || !(db -> isOpen())))
     {
-        outputData->quotesInfo.insert(it -> toInt(), quoteInfo);
+        if (!connectDatabase())
+        {
+            emit sendGuiText("Database connection error ", false);
+        }
+    }
+
+
+    outputData -> quotesInfo.clear();
+    QStringList quotes = m_quotes.split(',');
+    QStringList::iterator it;
+    QuoteInfo quoteInfo;
+    for (it = quotes.begin(); it != quotes.end(); ++it)
+    {
+        outputData -> quotesInfo.insert(it -> toInt(), quoteInfo);
     }
 }
 
 void ReplyHandler::getReply(QNetworkReply* reply)
 {
-    ++countReceivedRequests;
     int error = reply -> error();
+    if (!serverConnectionEstablished_)
+    {
+        serverConnectionEstablished_ = true;        
+        emit serverConnectionEstablished(error == QNetworkReply::NoError);
+        reply -> deleteLater();
+        return;
+    }
+    ++countReceivedRequests;
+
     if (error != QNetworkReply::NoError)
     {
-        qDebug() << "Network error: " << error << endl;
+        emit sendGuiText("Network error " + QString().setNum(error), true);
 
     }
     else if (reply -> property("groupID").toInt() != groupID)
     {
-        qDebug() << "Network error: incorrect groupID: "<< reply -> property("groupID").toInt() << " " <<
-                 reply -> property("timeframe").toInt()<< endl;
+        emit sendGuiText("Time period is too small.", true);
     }
     else
     {
-        qDebug() << "Get Request. GRoupID: " << groupID << " Timeframe: " << reply -> property("timeframe").toInt();
-
         saveReply(reply);
+
         if (countReceivedRequests == numTimeframes)
         {
-            QTime time;
-            outputData -> time = time.currentTime();
-            if (fileRecordOn)
-            {
-                // Запись в файл //
-            }
+            outputData -> time = QTime().currentTime();
 
-            printInfo();
+            // printInfo();
             // Отправление //
 
+            if (recordOn)
+            {
+                if (!insertInDatabase())
+                   emit sendGuiText("Database insert error", true);
+            }
+
+            //qDebug() << "Get Request. GRoupID: " << groupID << endl;
             ++groupID;
             countReceivedRequests = 0;
         }
@@ -71,42 +98,71 @@ void ReplyHandler::saveReply(QNetworkReply *reply)
     QJsonDocument jsonResponse = QJsonDocument::fromJson(strReply.toUtf8());
     QJsonObject jsonObject = jsonResponse.object();
 
-    TimeframePack* p_tmfPack;
+    TimeframePack p_tmfPack;
     QJsonObject quote_obj;
     int quote;
-    QJsonObject::const_iterator it, time_it = jsonObject.constEnd();
-    --time_it;
-    for (it = jsonObject.constBegin(); it != time_it; ++it)
+    QJsonObject::iterator it, time_it = --jsonObject.end();
+    for (it = jsonObject.begin(); it != time_it; ++it)
     {
         quote = it.key().toInt();
-        p_tmfPack = &((outputData ->quotesInfo[quote]).timeframePacks[countReceivedRequests]);
 
         quote_obj = it.value().toObject();
-        p_tmfPack -> timeframe = timeframe;
-        p_tmfPack -> maBuy = quote_obj["maBuy"].toInt();
-        p_tmfPack -> maSell = quote_obj["maSell"].toInt();
-        p_tmfPack -> tiBuy = quote_obj["tiBuy"].toInt();
-        p_tmfPack -> tiSell = quote_obj["tiSell"].toInt();
+        p_tmfPack.maBuy = quote_obj["maBuy"].toInt();
+        p_tmfPack.maSell = quote_obj["maSell"].toInt();
+        p_tmfPack.tiBuy = quote_obj["tiBuy"].toInt();
+        p_tmfPack.tiSell = quote_obj["tiSell"].toInt();
+        (outputData -> quotesInfo[quote]).timeframePacks[timeframe] = p_tmfPack;
     }
 }
 
+
+bool ReplyHandler::insertInDatabase()
+{
+    QSqlQuery query;
+    query.prepare("INSERT INTO main (quote, time, timeframe, maBuy, maSell, tiBuy, tiSell) "
+              "VALUES (:quote, :time, :timeframe, :maBuy, :maSell, :tiBuy, :tiSell)");
+
+    QMap<int, QuoteInfo>::const_iterator quote_it;
+    QMap<int, TimeframePack>::const_iterator tmfr_it;
+    int quote;
+    for (quote_it = outputData->quotesInfo.constBegin(); quote_it != outputData->quotesInfo.constEnd(); ++quote_it)
+    {
+        quote = quote_it.key();
+        for (tmfr_it = (quote_it -> timeframePacks).constBegin(); tmfr_it != (quote_it -> timeframePacks).constEnd(); ++tmfr_it)
+        {
+            query.bindValue(":quote", QVariant(quote));
+            query.bindValue(":time", QVariant((outputData -> time).toString("hh:mm:ss.zzz")));
+            query.bindValue(":timeframe", QVariant(tmfr_it.key()));
+            query.bindValue(":maBuy", QVariant(tmfr_it -> maBuy));
+            query.bindValue(":maSell", QVariant(tmfr_it -> maSell));
+            query.bindValue(":tiBuy", QVariant(tmfr_it -> tiBuy));
+            query.bindValue(":tiSell", QVariant(tmfr_it -> tiSell));
+
+            if (!query.exec())
+                return false;
+        }
+    }
+
+    return true;
+}
 
 void ReplyHandler:: printInfo()
 {
     qDebug() <<" Request: " <<outputData->time << endl;
     QMap<int, QuoteInfo>::const_iterator it;
+    QMap<int, TimeframePack>::const_iterator tmfr_it;
     int key;
     for (it = outputData->quotesInfo.constBegin(); it != outputData->quotesInfo.constEnd(); ++it)
     {
         key = it.key();
         qDebug() << key;
-        for (int i = 0; i < 4; ++i)
+        for (tmfr_it = (it -> timeframePacks).constBegin(); tmfr_it != (it -> timeframePacks).constEnd(); ++tmfr_it)
         {
-            qDebug() << " " << it.value().timeframePacks[i].timeframe;
-            qDebug() << "   maBuy:" << it.value().timeframePacks[i].maBuy;
-            qDebug() << "   maSell:" << it.value().timeframePacks[i].maSell;
-            qDebug() << "   tiBuy:" << it.value().timeframePacks[i].tiBuy;
-            qDebug() << "   tiSell:" << it.value().timeframePacks[i].tiSell;
+            qDebug() << " " << tmfr_it.key();
+            qDebug() << "   maBuy:" << tmfr_it -> maBuy;
+            qDebug() << "   maSell:" << tmfr_it -> maSell;
+            qDebug() << "   tiBuy:" << tmfr_it -> tiBuy;
+            qDebug() << "   tiSell:" << tmfr_it -> tiSell;
         }
     }
 }
