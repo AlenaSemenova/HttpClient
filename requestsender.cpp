@@ -13,21 +13,14 @@ RequestSender::RequestSender(QObject* pobj, ReplyHandler* replyHandler) : QObjec
             replyHandler, SLOT(getReply(QNetworkReply*)));
 }
 
-void RequestSender::finish()
-{
-    //networkManager -> clearAccessCache();
-    qDebug() << "Finish for RequestSender" << QThread::currentThread() << endl;
-    deleteLater();
-}
-
-void RequestSender::changeSettings(const QString &quotes, int frequency, bool fileRecordOn)
+void RequestSender::changeSettings(const QString &quotes, int period, bool fileRecordOn)
 {
     for(int i = 0; i < numTimeframes; ++i)
     {
         requests[i] -> formRequest(quotes, timeframes[i]);
     }
 
-    timer ->start(frequency);
+    timer ->start(period);
 }
 
 void RequestSender::sendRequests()
@@ -38,10 +31,27 @@ void RequestSender::sendRequests()
         reply ->setProperty("timeframe", QVariant(timeframes[i]));
         reply ->setProperty("groupID", QVariant(groupID));
     }
-    QTime time;
-    qDebug() << "Requests were sent. GroupID " << groupID << " " << time.currentTime() <<endl;
+   // qDebug() << "Requests were sent. GroupID " << groupID << " " << QTime().currentTime() <<endl;
 
     ++groupID;
+}
+
+void RequestSender::stopTimer()
+{
+    timer -> stop();
+    emit sendGuiText("Application is paused.", false);
+}
+
+void RequestSender::testServerConnection()
+{
+    QNetworkRequest request;
+    request.setUrl(QUrl("https://ssltsw.forexprostools.com/"));
+
+    QSslConfiguration config = QSslConfiguration::defaultConfiguration();
+    config.setProtocol(QSsl::AnyProtocol);
+    request.setSslConfiguration(config);
+
+    networkManager -> get(request);
 }
 
 //--------------------------------------------

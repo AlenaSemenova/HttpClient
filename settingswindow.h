@@ -11,13 +11,13 @@ class SettingsWindow: public QWidget
     Q_OBJECT
 
 private:
-    static const int minFreq = 400;
+    static const int minPeriod = 300;
     QLabel* quotesText;
-    QLabel* freqText;
+    QLabel* periodText;
 
     QLineEdit* quotesEdit;
-    QLineEdit* freqEdit;
-    QCheckBox* fileCheckBox;
+    QLineEdit* periodEdit;
+    QCheckBox* recordCheckBox;
     QPushButton* goButton;
     QPushButton* pauseButton;
     QTextEdit* textEdit;
@@ -34,10 +34,12 @@ private:
 signals:
     void settingsChangedCorrectly(const QString &, int, bool);
     void windowClosed();
+    void testServerConnection();
 
 private slots:
     void settingsChanged();
-    void debug();
+    void printText(const QString &, bool);
+    void serverConnectionHandler(bool);
 
 public:
     SettingsWindow(QWidget* pwgt = 0);

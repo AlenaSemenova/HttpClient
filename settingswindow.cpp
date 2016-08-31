@@ -1,13 +1,13 @@
 #include<settingswindow.h>
 
-SettingsWindow::SettingsWindow(QWidget* pobj/*=0*/) : QWidget(pobj)
+SettingsWindow::SettingsWindow(QWidget* pobj) : QWidget(pobj)
 {
     quotesText = new QLabel("Quotes:", this);
-    freqText = new QLabel("Frequency:", this);
+    periodText = new QLabel("Time period:", this);
 
     quotesEdit = new QLineEdit(this);
-    freqEdit = new QLineEdit(this);
-    fileCheckBox = new QCheckBox("File Record", this);
+    periodEdit = new QLineEdit(this);
+    recordCheckBox = new QCheckBox("Record", this);
     goButton = new QPushButton("GO", this);
     pauseButton = new QPushButton("Pause", this);
     textEdit = new QTextEdit(this);
@@ -17,9 +17,9 @@ SettingsWindow::SettingsWindow(QWidget* pobj/*=0*/) : QWidget(pobj)
     Layout ->addWidget(textEdit, 0, 0, 1, -1);
     Layout ->addWidget(quotesText, 1, 0);
     Layout ->addWidget(quotesEdit, 1, 1);
-    Layout ->addWidget(freqText, 2, 0);
-    Layout ->addWidget(freqEdit, 2, 1);
-    Layout ->addWidget(fileCheckBox, 3, 0, 1, -1, Qt::AlignLeft);
+    Layout ->addWidget(periodText, 2, 0);
+    Layout ->addWidget(periodEdit, 2, 1);
+    Layout ->addWidget(recordCheckBox, 3, 0, 1, -1, Qt::AlignLeft);
     Layout ->addWidget(goButton, 4, 0, 1, -1);
     Layout ->addWidget(pauseButton, 5, 0, 1, -1);
     setLayout(Layout);
@@ -27,51 +27,85 @@ SettingsWindow::SettingsWindow(QWidget* pobj/*=0*/) : QWidget(pobj)
     connect(goButton, SIGNAL(clicked()), this, SLOT(settingsChanged()));
 
     //Создание RequestSender и ReplyHandler  
-    threadReplyHandler = new QThread;
+    threadReplyHandler = new QThread(this);
     replyHandler = new ReplyHandler;
-    threadSender = new QThread;
+    threadSender = new QThread(this);
     requestSender = new RequestSender(0, replyHandler);
 
     requestSender -> moveToThread(threadSender);
     replyHandler -> moveToThread(threadReplyHandler);
 
     connect(this, SIGNAL(settingsChangedCorrectly(const QString &, int, bool)),
-                replyHandler, SLOT(changeSettings(const QString &, int, bool)));
+        replyHandler, SLOT(changeSettings(const QString &, int, bool)));
     connect(this, SIGNAL(settingsChangedCorrectly(const QString &, int, bool)),
-            requestSender, SLOT(changeSettings(const QString &, int, bool)));
+        requestSender, SLOT(changeSettings(const QString &, int, bool)));
+    connect(pauseButton, SIGNAL(clicked()),
+         requestSender, SLOT(stopTimer()));
+    connect(replyHandler, SIGNAL(sendGuiText(const QString &, bool)),
+         this, SLOT(printText(const QString &, bool)));
+    connect(replyHandler, SIGNAL(serverConnectionEstablished(bool)),
+            this, SLOT(serverConnectionHandler(bool)));
+    connect(this, SIGNAL(testServerConnection()),
+            requestSender, SLOT(testServerConnection()));
 
-    //Запускание обоих нитей  
+    // сигналы для обработки завершения работы
+    connect(replyHandler, SIGNAL(destroyed()),
+             requestSender, SLOT(deleteLater()));
+    connect(requestSender, SIGNAL(destroyed()),
+               this, SLOT(close()));
+    //
+
     threadSender -> start();   
     threadReplyHandler -> start();
 
-}
-
-void SettingsWindow::debug()
-{
-    qDebug() << "deleted Odject" << endl;
+    emit testServerConnection();
 }
 
 void SettingsWindow::closeEvent(QCloseEvent * event)
 {
-    requestSender -> deleteLater();
-    replyHandler -> deleteLater();
+    static int numCalls = 0;    
+    if (numCalls == 0)
+    {
+        textEdit -> append("Closing...");
+        replyHandler -> deleteLater();
+        ++numCalls;
+        event -> ignore();
+    }
+    else
+    {
+        qDebug() << "end: " << QTime().currentTime();
+        threadSender -> quit();
+        threadReplyHandler -> quit();
 
-    QThread::currentThread() -> sleep(3);
+        threadSender -> wait();
+        threadReplyHandler -> wait();
 
-    threadSender -> quit();
-    threadReplyHandler -> quit();
+        QMessageBox* messageBox = new QMessageBox(QMessageBox::Information, "Message Box",
+            "Do you want to close application?", QMessageBox::Ok, this);
+        int status = messageBox -> exec();
 
-    threadSender -> wait();
-    threadReplyHandler -> wait();
+        if (status == QMessageBox::Ok)
+            event -> accept();
+    }
+}
 
-    delete threadSender;
-    delete threadReplyHandler;
-
-    event -> accept();
+void SettingsWindow::serverConnectionHandler(bool success)
+{
+    this -> show();
+    if (success)
+    {
+        textEdit -> append("Server connection: OK");
+    }
+    else
+    {
+        textEdit -> append("Server connection error");
+        this -> close();
+    }
 }
 
 void SettingsWindow::settingsChanged()
 {
+    qDebug() << "start: " << QTime().currentTime();
     //Quotes
     QString text = quotesEdit->text();
     int size = text.size(), i = 0;
@@ -80,17 +114,26 @@ void SettingsWindow::settingsChanged()
 
     if (!(size > 0 && i == size && text[size - 1].isDigit()))
     {
-        qDebug() << "Quotes: Error input data" << endl;
+        textEdit -> append("Quotes: Error input data");
         return;
     }
 
-    //Frequency
-    int frequency = freqEdit->text().toInt();
-    if (frequency < minFreq)
+    //Period
+    int period = periodEdit->text().toInt();
+    if (period < minPeriod)
     {
-        qDebug() << "Frequeny: Error input data. It has to be equal or greater than " << minFreq << endl;
+        textEdit -> append("Time period: error input data. It has to be equal or greater than " + QString().setNum(minPeriod));
         return;
     }
 
-    emit settingsChangedCorrectly(text, frequency, fileCheckBox -> isChecked());
+    textEdit -> append("Input data: OK");
+    emit settingsChangedCorrectly(text, period, recordCheckBox -> isChecked());
+}
+
+void SettingsWindow::printText(const QString & text, bool exit)
+{
+    textEdit -> append(text);
+
+    if (exit)
+        this -> close();
 }

@@ -3,6 +3,9 @@
 
 #include <QtNetwork>
 #include <QObject>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlError>
 
 class ReplyHandler: public QObject
 {
@@ -15,20 +18,27 @@ public:
     struct QuoteInfo;
     struct OutputData;
 
-
 private:
     static const int numTimeframes = 4;
-    int groupID;
+    unsigned groupID;
     int countReceivedRequests;
     OutputData* outputData;
-    bool fileRecordOn;
+    bool recordOn;
+    QSqlDatabase* db;
+    bool serverConnectionEstablished_;
 
+    bool connectDatabase();
     void saveReply(QNetworkReply*);
     void printInfo();
+    bool insertInDatabase();
 
 private slots:
     void getReply(QNetworkReply*);
     void changeSettings(const QString &, int, bool);
+
+signals:
+    void sendGuiText(const QString &, bool);
+    void serverConnectionEstablished(bool);
 };
 
 
@@ -37,7 +47,6 @@ private slots:
 
 struct ReplyHandler::TimeframePack
 {
-    int timeframe;
     int maBuy;
     int maSell;
     int tiBuy;
@@ -47,7 +56,7 @@ struct ReplyHandler::TimeframePack
 struct ReplyHandler::QuoteInfo
 {
     static const int numTimeframes = 4;
-    TimeframePack timeframePacks[numTimeframes];
+    QMap <int, TimeframePack> timeframePacks;
 };
 
 struct ReplyHandler::OutputData

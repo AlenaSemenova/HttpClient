@@ -5,7 +5,6 @@
 #include <QObject>
 #include "ReplyHandler.h"
 
-//class Request;
 class RequestSender: public QObject
 {
     Q_OBJECT
@@ -16,17 +15,19 @@ private:
     QTimer* timer;
     class Request* requests[numTimeframes];
     int timeframes[numTimeframes] = {60, 300, 900, 1800};
-    int groupID;
+    unsigned groupID;
 
 private slots:
     void changeSettings(const QString &, int, bool);
     void sendRequests();
-    void finish();
+    void stopTimer();
+    void testServerConnection();
 
 public:
-    RequestSender(QObject* pobj = 0, ReplyHandler* = 0);
-    RequestSender(const RequestSender&);
+    RequestSender(QObject* pobj = 0, ReplyHandler* = 0);    
 
+signals:
+    void sendGuiText(const QString &, bool);
 };
 
 
