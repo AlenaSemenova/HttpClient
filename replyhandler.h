@@ -20,12 +20,14 @@ public:
 
 private:
     static const int numTimeframes = 4;
+
     unsigned groupID;
     int countReceivedRequests;
     OutputData* outputData;
     bool recordOn;
     QSqlDatabase* db;
     bool serverConnectionEstablished_;
+
 
     bool connectDatabase();
     void saveReply(QNetworkReply*);
@@ -39,6 +41,7 @@ private slots:
 signals:
     void sendGuiText(const QString &, bool);
     void serverConnectionEstablished(bool);
+    //void increaseTime();
 };
 
 

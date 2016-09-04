@@ -22,6 +22,7 @@ private slots:
     void sendRequests();
     void stopTimer();
     void testServerConnection();
+   // void increaseTime();
 
 public:
     RequestSender(QObject* pobj = 0, ReplyHandler* = 0);    

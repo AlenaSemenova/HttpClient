@@ -18,7 +18,12 @@ ReplyHandler::~ReplyHandler()
 bool ReplyHandler::connectDatabase()
 {
     db = new QSqlDatabase(QSqlDatabase::addDatabase("QODBC"));
-    db -> setDatabaseName("DRIVER={SQL SERVER};SERVER={ALENA-PC\\SQLEXPRESS};DATABASE={Exchange};UID={user1};PWD={user};Trusted_Connection=Yes;");
+    QString server = "ALENA-PC\\SQLEXPRESS";
+    QString database = "Exchange";
+    QString user = "user1";
+    QString password = "user";
+    db -> setDatabaseName(QString("DRIVER={SQL SERVER};SERVER={%1};DATABASE={%2};UID={%3};PWD={%4};Trusted_Connection=Yes;").
+                          arg(server).arg(database).arg(user).arg(password));
     db -> setConnectOptions();
     return db -> open();
 }
@@ -34,7 +39,6 @@ void ReplyHandler::changeSettings(const QString &m_quotes, int, bool m_recordOn)
         }
     }
 
-
     outputData -> quotesInfo.clear();
     QStringList quotes = m_quotes.split(',');
     QStringList::iterator it;
@@ -46,30 +50,46 @@ void ReplyHandler::changeSettings(const QString &m_quotes, int, bool m_recordOn)
 }
 
 void ReplyHandler::getReply(QNetworkReply* reply)
-{
+{    
     int error = reply -> error();
-    if (!serverConnectionEstablished_)
+    unsigned receivedGroupID = reply -> property("groupID").toInt();
+
+    qDebug() << "Get Request. GRoupID: " << receivedGroupID << endl;
+
+    if (!serverConnectionEstablished_) //пробный запрос
     {
         serverConnectionEstablished_ = true;        
         emit serverConnectionEstablished(error == QNetworkReply::NoError);
         reply -> deleteLater();
         return;
     }
-    ++countReceivedRequests;
-
-    if (error != QNetworkReply::NoError)
+    if (error != QNetworkReply::NoError) //ошибка сервера
     {
         emit sendGuiText("Network error " + QString().setNum(error), true);
 
     }
-    else if (reply -> property("groupID").toInt() != groupID)
+    else if (receivedGroupID > groupID) //смешение запросов из разных групп
     {
-        emit sendGuiText("Time period is too small.", true);
-    }
-    else
-    {
-        saveReply(reply);
+        emit sendGuiText("Request was skipped " + QString().setNum(groupID), false);
+        //emit sendGuiText("Request was skipped" + QTime().currentTime().toString(), false);
+        qDebug() << "Skip request. Received id: " <<receivedGroupID << " groupID: " << groupID;
 
+        groupID = receivedGroupID;
+
+        QMap <int, QuoteInfo>::iterator it;
+        for (it = outputData -> quotesInfo.begin(); it != outputData -> quotesInfo.end(); ++it)
+        {
+            it -> timeframePacks.clear();
+        }
+
+        saveReply(reply);
+        countReceivedRequests = 1;
+    }
+    else if (receivedGroupID == groupID)
+    {
+        ++countReceivedRequests;
+
+        saveReply(reply);
         if (countReceivedRequests == numTimeframes)
         {
             outputData -> time = QTime().currentTime();
@@ -83,10 +103,10 @@ void ReplyHandler::getReply(QNetworkReply* reply)
                    emit sendGuiText("Database insert error", true);
             }
 
-            //qDebug() << "Get Request. GRoupID: " << groupID << endl;
             ++groupID;
             countReceivedRequests = 0;
         }
+
     }
     reply ->deleteLater();
 }

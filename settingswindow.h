@@ -11,7 +11,7 @@ class SettingsWindow: public QWidget
     Q_OBJECT
 
 private:
-    static const int minPeriod = 300;
+    static const int minPeriod = 0;
     QLabel* quotesText;
     QLabel* periodText;
 
@@ -40,6 +40,7 @@ private slots:
     void settingsChanged();
     void printText(const QString &, bool);
     void serverConnectionHandler(bool);
+//    void informIncreasingTime();
 
 public:
     SettingsWindow(QWidget* pwgt = 0);

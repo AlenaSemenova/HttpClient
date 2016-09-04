@@ -41,13 +41,20 @@ SettingsWindow::SettingsWindow(QWidget* pobj) : QWidget(pobj)
         requestSender, SLOT(changeSettings(const QString &, int, bool)));
     connect(pauseButton, SIGNAL(clicked()),
          requestSender, SLOT(stopTimer()));
+
     connect(replyHandler, SIGNAL(sendGuiText(const QString &, bool)),
          this, SLOT(printText(const QString &, bool)));
+
     connect(replyHandler, SIGNAL(serverConnectionEstablished(bool)),
             this, SLOT(serverConnectionHandler(bool)));
     connect(this, SIGNAL(testServerConnection()),
             requestSender, SLOT(testServerConnection()));
-
+/*
+    connect(replyHandler, SIGNAL(increaseTime()),
+            requestSender, SLOT(increaseTime()));
+    connect(replyHandler, SIGNAL(increaseTime()),
+            this, SLOT(informIncreasingTime()));
+*/
     // сигналы для обработки завершения работы
     connect(replyHandler, SIGNAL(destroyed()),
              requestSender, SLOT(deleteLater()));
@@ -102,7 +109,13 @@ void SettingsWindow::serverConnectionHandler(bool success)
         this -> close();
     }
 }
-
+/*
+void SettingsWindow::informIncreasingTime()
+{
+    textEdit -> append("Time period was increased");
+    periodEdit -> setText(QString().setNum(periodEdit -> text().toInt() + 100));
+}
+*/
 void SettingsWindow::settingsChanged()
 {
     qDebug() << "start: " << QTime().currentTime();

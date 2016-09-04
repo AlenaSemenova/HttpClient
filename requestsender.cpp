@@ -31,7 +31,7 @@ void RequestSender::sendRequests()
         reply ->setProperty("timeframe", QVariant(timeframes[i]));
         reply ->setProperty("groupID", QVariant(groupID));
     }
-   // qDebug() << "Requests were sent. GroupID " << groupID << " " << QTime().currentTime() <<endl;
+    qDebug() << "Requests were sent. GroupID " << groupID << " " << QTime().currentTime() <<endl;
 
     ++groupID;
 }
@@ -53,7 +53,12 @@ void RequestSender::testServerConnection()
 
     networkManager -> get(request);
 }
-
+/*
+void RequestSender::increaseTime()
+{
+    timer -> setInterval((timer -> interval()) + 100);
+}
+*/
 //--------------------------------------------
 //--------------------------------------------
 Request::Request(QObject* pobj) : QObject(pobj)
@@ -89,5 +94,4 @@ void Request::formRequest(const QString &quotes, int timeframe)
     m_pnr->setRawHeader("Connection", "keep-alive");
     m_pnr->setRawHeader("Referer", "https://ssltsw.forexprostools.com/");
 }
-
 
